@@ -541,6 +541,7 @@ defmodule BlockScoutWeb.API.V2.TransactionView do
       "gas_limit" => transaction.gas,
       "max_fee_per_gas" => transaction.max_fee_per_gas,
       "max_priority_fee_per_gas" => transaction.max_priority_fee_per_gas,
+      "fee_token" => transaction.fee_token,
       "base_fee_per_gas" => base_fee_per_gas,
       "priority_fee" => priority_fee_display(priority_fee_per_gas, transaction),
       "transaction_burnt_fee" => burnt_fees(transaction, base_fee_per_gas),
