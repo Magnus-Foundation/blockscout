@@ -333,6 +333,74 @@ defmodule EthereumJSONRPC.Transaction do
   # ## Returns
   # - The resulting map.
   @spec do_elixir_to_params(%{String.t() => any()}) :: %{atom() => any()}
+  # Magnus AA-style transactions (tx_type=118): the actual operation lives
+  # in `calls[0]`. Flatten it into the standard top-level shape so the rest
+  # of the indexer pipeline can index a `to`/`input`/`value` per tx, and pass
+  # `fee_token` through for downstream display.
+  defp do_elixir_to_params(
+         %{
+           "blockHash" => block_hash,
+           "blockNumber" => block_number,
+           "from" => from_address_hash,
+           "gas" => gas,
+           "gasPrice" => gas_price,
+           "hash" => hash,
+           "nonce" => nonce,
+           "transactionIndex" => index,
+           "type" => type,
+           "maxPriorityFeePerGas" => max_priority_fee_per_gas,
+           "maxFeePerGas" => max_fee_per_gas,
+           "calls" => calls
+         } = transaction
+       ) do
+    first_call =
+      case calls do
+        [c | _] -> c
+        _ -> %{}
+      end
+
+    to = Map.get(transaction, "to") || Map.get(first_call, "to")
+    input_data = Map.get(transaction, "input") || Map.get(first_call, "input") || "0x"
+
+    value =
+      case Map.get(transaction, "value") || Map.get(first_call, "value") do
+        nil -> 0
+        v when is_integer(v) -> v
+        "0x" <> _ = hex -> :erlang.binary_to_integer(String.replace_prefix(hex, "0x", ""), 16)
+        v when is_binary(v) -> :erlang.binary_to_integer(v)
+      end
+
+    result = %{
+      block_hash: block_hash,
+      block_number: block_number,
+      from_address_hash: from_address_hash,
+      gas: gas,
+      gas_price: gas_price,
+      hash: hash,
+      index: index,
+      input: input_data,
+      nonce: nonce,
+      to_address_hash: to,
+      value: value,
+      transaction_index: index,
+      type: type,
+      max_priority_fee_per_gas: max_priority_fee_per_gas,
+      max_fee_per_gas: max_fee_per_gas,
+      fee_token: Map.get(transaction, "feeToken"),
+      # tx_type=118 keeps signature nested in `signature.{r,s,v}` (stripped by
+      # the entry_to_elixir filter). r/s/v are NOT NULL columns; default to 0.
+      # The on-chain signature is authoritative — these columns are decorative.
+      r: 0,
+      s: 0,
+      v: 0
+    }
+
+    put_if_present(result, transaction, [
+      {"creates", :created_contract_address_hash},
+      {"block_timestamp", :block_timestamp}
+    ])
+  end
+
   defp do_elixir_to_params(
          %{
            "blockHash" => block_hash,
@@ -723,7 +791,7 @@ defmodule EthereumJSONRPC.Transaction do
   #
   # "txType": to avoid FunctionClauseError when indexing Wanchain
   defp entry_to_elixir({key, value})
-       when key in ~w(blockHash condition creates from hash input jsonrpc publicKey raw to txType executionNode requestRecord blobVersionedHashes requestId),
+       when key in ~w(blockHash condition creates from hash input jsonrpc publicKey raw to txType executionNode requestRecord blobVersionedHashes requestId calls feeToken),
        do: {key, value}
 
   # specific to Nethermind client

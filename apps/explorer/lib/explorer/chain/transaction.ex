@@ -225,6 +225,8 @@ defmodule Explorer.Chain.Transaction.Schema do
         field(:max_priority_fee_per_gas, Wei)
         field(:max_fee_per_gas, Wei)
         field(:type, :integer)
+        # Magnus: fee token (mUSD/mEUR/mVND) the tx pays gas in (AA tx).
+        field(:fee_token, Hash.Address)
         field(:has_error_in_internal_transactions, :boolean)
         field(:fhe_operations_count, :integer)
         field(:has_token_transfers, :boolean, virtual: true)
@@ -340,7 +342,7 @@ defmodule Explorer.Chain.Transaction do
                      block_consensus block_timestamp created_contract_address_hash
                      cumulative_gas_used earliest_processing_start error gas_price
                      gas_used index created_contract_code_indexed_at status
-                     to_address_hash revert_reason type has_error_in_internal_transactions r s v)a
+                     to_address_hash revert_reason type fee_token has_error_in_internal_transactions r s v)a
 
   @chain_type_optional_attrs (case @chain_type do
                                 :optimism ->
