@@ -2622,22 +2622,41 @@ defmodule Explorer.Chain.Transaction do
     method_id_filter = Keyword.get(options, :method)
     type_filter = Keyword.get(options, :type)
 
-    case !paging_options.key && method_id_filter in [nil, []] && type_filter in [nil, []] &&
-           Transactions.atomic_take_enough(paging_options.page_size) do
-      transactions when is_list(transactions) ->
-        transactions |> Chain.select_repo(options).preload(Map.keys(necessity_by_association))
+    result =
+      case !paging_options.key && method_id_filter in [nil, []] && type_filter in [nil, []] &&
+             Transactions.atomic_take_enough(paging_options.page_size) do
+        transactions when is_list(transactions) ->
+          transactions |> Chain.select_repo(options).preload(Map.keys(necessity_by_association))
 
-      _ ->
-        fetch_recent_collated_transactions(
-          old_ui?,
-          paging_options,
-          necessity_by_association,
-          method_id_filter,
-          type_filter,
-          options
-        )
-    end
+        _ ->
+          fetch_recent_collated_transactions(
+            old_ui?,
+            paging_options,
+            necessity_by_association,
+            method_id_filter,
+            type_filter,
+            options
+          )
+      end
+
+    Enum.reject(result, &magnus_consensus_housekeeping?/1)
   end
+
+  # Magnus chains insert one consensus housekeeping tx as index 0 of
+  # every block. It carries protocol metadata (validator set rotation,
+  # block-start FX snapshot, etc.) but is not a user transaction and
+  # has from=ZERO, to=ZERO, gas=0, value=0. Hide it from the main-page
+  # feed so users see real activity instead of one consensus tx per
+  # block of noise. Block detail pages still show it (block.tx_count
+  # stays consistent with chain RPC).
+  defp magnus_consensus_housekeeping?(%{from_address_hash: from, to_address_hash: to, gas: gas})
+       when not is_nil(from) and not is_nil(to) and not is_nil(gas) do
+    zero_addr = <<0::160>>
+
+    from.bytes == zero_addr and to.bytes == zero_addr and Decimal.eq?(gas, 0)
+  end
+
+  defp magnus_consensus_housekeeping?(_), do: false
 
   defp fetch_recent_collated_transactions(
          old_ui?,
