@@ -541,7 +541,21 @@ defmodule BlockScoutWeb.API.V2.TransactionView do
       "gas_limit" => transaction.gas,
       "max_fee_per_gas" => transaction.max_fee_per_gas,
       "max_priority_fee_per_gas" => transaction.max_priority_fee_per_gas,
-      "fee_token" => transaction.fee_token,
+      # Magnus AA tx fee token. Serialize as a full AddressParam (with
+      # name from address_names) instead of a raw hash, so the frontend's
+      # AddressEntity component can render the labelled address.
+      "fee_token" =>
+        if(transaction.fee_token,
+          do:
+            Helper.address_with_info(
+              single_transaction? && conn,
+              nil,
+              transaction.fee_token,
+              single_transaction?,
+              watchlist_names
+            ),
+          else: nil
+        ),
       "base_fee_per_gas" => base_fee_per_gas,
       "priority_fee" => priority_fee_display(priority_fee_per_gas, transaction),
       "transaction_burnt_fee" => burnt_fees(transaction, base_fee_per_gas),
