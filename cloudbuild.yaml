@@ -1,0 +1,39 @@
+# Cloud Build pipeline for the Magnus blockscout fork.
+# Triggered on push to magnus/* branches; builds and pushes to AR.
+
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build'
+    args:
+      - 'build'
+      - '-f'
+      - 'docker/Dockerfile'
+      - '-t'
+      - '${_REGISTRY}/blockscout:${_TAG}'
+      - '-t'
+      - '${_REGISTRY}/blockscout:${SHORT_SHA}'
+      - '-t'
+      - '${_REGISTRY}/blockscout:latest'
+      - '--build-arg'
+      - 'BLOCKSCOUT_VERSION=magnus-${SHORT_SHA}'
+      - '--build-arg'
+      - 'RELEASE_VERSION=11.0.2'
+      - '.'
+    timeout: '3600s'
+
+images:
+  - '${_REGISTRY}/blockscout:${_TAG}'
+  - '${_REGISTRY}/blockscout:${SHORT_SHA}'
+  - '${_REGISTRY}/blockscout:latest'
+
+substitutions:
+  _REGISTRY: asia-southeast1-docker.pkg.dev/prj-cs-loragon/fx-reporter
+  # _TAG defaults to branch name with slashes replaced (set in trigger).
+  _TAG: 'magnus-staccato'
+
+options:
+  machineType: E2_HIGHCPU_8
+  diskSizeGb: 100
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: '3600s'
