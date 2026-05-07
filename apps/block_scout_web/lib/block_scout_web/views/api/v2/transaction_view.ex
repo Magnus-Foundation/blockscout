@@ -542,20 +542,15 @@ defmodule BlockScoutWeb.API.V2.TransactionView do
       "max_fee_per_gas" => transaction.max_fee_per_gas,
       "max_priority_fee_per_gas" => transaction.max_priority_fee_per_gas,
       # Magnus AA tx fee token. Serialize as a full AddressParam (with
-      # name from address_names) instead of a raw hash, so the frontend's
-      # AddressEntity component can render the labelled address.
-      "fee_token" =>
-        if(transaction.fee_token,
-          do:
-            Helper.address_with_info(
-              single_transaction? && conn,
-              nil,
-              transaction.fee_token,
-              single_transaction?,
-              watchlist_names
-            ),
-          else: nil
-        ),
+      # name joined from address_names) instead of a raw hash, so the
+      # frontend's AddressEntity component renders the labelled address
+      # ("Magnus VND Token") instead of bare 0x20c0…0020 hex.
+      #
+      # Helper.address_with_info won't auto-join address_names when the
+      # struct arg is nil, so we look up the Address explicitly here.
+      # Per-tx SQL lookup is acceptable on detail pages; for list pages
+      # the resulting N queries are tolerable on a low-traffic explorer.
+      "fee_token" => prepare_fee_token(transaction.fee_token, conn, single_transaction?, watchlist_names),
       "base_fee_per_gas" => base_fee_per_gas,
       "priority_fee" => priority_fee_display(priority_fee_per_gas, transaction),
       "transaction_burnt_fee" => burnt_fees(transaction, base_fee_per_gas),
@@ -1096,5 +1091,25 @@ defmodule BlockScoutWeb.API.V2.TransactionView do
       "result" => "0x" <> Base.encode16(operation.result_handle, case: :lower),
       "block_number" => operation.block_number
     }
+  end
+
+  # Magnus AA fee_token: look up the Address by hash so address_names is
+  # preloaded, then run it through the standard helper.
+  defp prepare_fee_token(nil, _conn, _single_transaction?, _watchlist_names), do: nil
+
+  defp prepare_fee_token(fee_token_hash, conn, single_transaction?, watchlist_names) do
+    fee_token_address =
+      case Chain.hash_to_address(fee_token_hash, []) do
+        {:ok, addr} -> addr
+        _ -> nil
+      end
+
+    Helper.address_with_info(
+      single_transaction? && conn,
+      fee_token_address,
+      fee_token_hash,
+      single_transaction?,
+      watchlist_names
+    )
   end
 end
